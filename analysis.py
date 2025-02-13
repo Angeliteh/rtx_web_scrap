@@ -7,8 +7,8 @@ def obtener_estadisticas():
     """
     Obtiene estadísticas de precios para cada modelo de GPU (RTX 4070, 4080, 4090).
     Calcula:
-      - Precio mínimo, máximo y promedio.
-      - Las 5 mejores ofertas (productos con precio inferior al promedio).
+    - Precio mínimo, máximo y promedio.
+    - Las 5 mejores ofertas (productos con precio inferior al promedio).
     """
     conn = sqlite3.connect(DATABASE_NAME)
     c = conn.cursor()
@@ -16,13 +16,13 @@ def obtener_estadisticas():
     estadisticas = {}
     for modelo in MODELOS_BUSQUEDA:
         c.execute('''SELECT MIN(precio), MAX(precio), AVG(precio)
-                     FROM productos WHERE modelo = ?''', (f"RTX {modelo}",))
+                    FROM productos WHERE modelo = ?''', (f"RTX {modelo}",))
         min_price, max_price, avg_price = c.fetchone()
         
         # Selecciona las 5 mejores ofertas (productos cuyo precio es menor al promedio)
         c.execute('''SELECT nombre, precio FROM productos 
-                     WHERE modelo = ? AND precio < ?
-                     ORDER BY precio LIMIT 5''', (f"RTX {modelo}", avg_price))
+                    WHERE modelo = ? AND precio < ?
+                    ORDER BY precio LIMIT 5''', (f"RTX {modelo}", avg_price))
         ofertas = c.fetchall()
         
         estadisticas[f"RTX {modelo}"] = {

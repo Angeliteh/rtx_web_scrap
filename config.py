@@ -18,7 +18,7 @@ USER_AGENTS = [
 # Lista de palabras prohibidas para filtrar productos irrelevantes (no GPUs)
 PALABRAS_PROHIBIDAS = [
     "soporte", "stand", "cable", "hub", "extensor", "base",
-    "refrigeración", "extensión", "adaptador", "computadora", "estación"
+    "refrigeración", "extensión", "adaptador", "computadora", "estación", "laptop", "placa"
 ]
 
 # Flag para mostrar el gráfico en pantalla (True) o guardarlo (False)
