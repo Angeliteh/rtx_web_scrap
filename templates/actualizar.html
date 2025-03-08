@@ -1,0 +1,50 @@
+<!-- templates/actualizar.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Actualizando Precios - Monitor de GPUs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <meta http-equiv="refresh" content="3;url=/" />
+    <style>
+        .loader {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+            margin: 50px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .actualizar-container {
+            text-align: center;
+            padding: 50px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Monitor de Precios de GPUs</h1>
+    </header>
+    
+    <div class="actualizar-container">
+        <h2>Actualizando Precios</h2>
+        <div class="loader"></div>
+        <p>Los precios se están actualizando. Serás redirigido automáticamente en unos segundos...</p>
+        <p>Si no eres redirigido, <a href="/">haz clic aquí</a> para volver a la página principal.</p>
+    </div>
+    
+    <footer>
+        <p>Monitor de Precios de GPUs &copy; {{ now.year }}</p>
+    </footer>
+</body>
+</html> 

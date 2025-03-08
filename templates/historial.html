@@ -1,0 +1,136 @@
+<!-- templates/historial.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial de Precios - {{ producto.nombre }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Historial de Precios</h1>
+        <a href="/" class="btn-volver">Volver a la lista</a>
+    </header>
+    
+    <div class="producto-detalle">
+        <div class="producto-imagen-grande">
+            <img src="{{ producto.imagen }}" alt="{{ producto.nombre }}">
+        </div>
+        
+        <div class="producto-info-detalle">
+            <h2>{{ producto.nombre }}</h2>
+            <p class="producto-modelo">Modelo: {{ producto.modelo }}</p>
+            <p class="producto-tienda">Tienda: {{ producto.tienda }}</p>
+            <p class="producto-precio-actual">Precio Actual: ${{ "%.2f"|format(producto.precio) }}</p>
+            <p class="producto-vendedor">Vendedor: {{ producto.vendedor }}</p>
+            <p class="producto-fecha">Última actualización: {{ producto.fecha }}</p>
+            <a href="{{ producto.link }}" target="_blank" class="btn-ver-grande">Ver en {{ producto.tienda }}</a>
+        </div>
+    </div>
+    
+    <div class="historial-container">
+        <h2>Historial de Precios</h2>
+        
+        <div class="grafico-container">
+            <canvas id="grafico-precios"></canvas>
+        </div>
+        
+        <div class="tabla-historial">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Precio</th>
+                        <th>Cambio</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for registro in historial %}
+                    <tr>
+                        <td>{{ registro.fecha }}</td>
+                        <td>${{ "%.2f"|format(registro.precio) }}</td>
+                        <td>
+                            {% if loop.index < historial|length %}
+                                {% set cambio = ((registro.precio - historial[loop.index].precio) / historial[loop.index].precio * 100)|round(2) %}
+                                {% if cambio > 0 %}
+                                    <span class="precio-subida">+{{ cambio }}%</span>
+                                {% elif cambio < 0 %}
+                                    <span class="precio-bajada">{{ cambio }}%</span>
+                                {% else %}
+                                    <span class="precio-igual">0%</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="precio-igual">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <footer>
+        <p>Monitor de Precios de GPUs &copy; {{ now.year }}</p>
+    </footer>
+    
+    <script>
+        // Código para generar el gráfico de precios
+        document.addEventListener('DOMContentLoaded', function() {
+            const ctx = document.getElementById('grafico-precios').getContext('2d');
+            
+            // Convertir fechas y precios para el gráfico
+            const fechas = {{ fechas|tojson }};
+            const precios = {{ precios|tojson }};
+            
+            // Crear el gráfico
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: fechas,
+                    datasets: [{
+                        label: 'Precio ($)',
+                        data: precios,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Precio ($)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Fecha'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Evolución del Precio'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `$${context.raw.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
