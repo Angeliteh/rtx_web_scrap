@@ -144,7 +144,19 @@ def scrape_amazon_page(html_content):
                 imagen = img_tag['src']
                 # Intentar obtener imagen de mayor resolución
                 if '_AC_UL320_' in imagen:
-                    imagen = imagen.replace('_AC_UL320_', '_AC_UL640_')
+                    imagen = imagen.replace('_AC_UL320_', '_AC_SL1500_')
+                elif '_AC_UL640_' in imagen:
+                    imagen = imagen.replace('_AC_UL640_', '_AC_SL1500_')
+                elif '_SR' in imagen:
+                    # Extraer el ID base de la imagen
+                    base_id_match = re.search(r'I\/([^._]+)', imagen)
+                    if base_id_match:
+                        base_id = base_id_match.group(1)
+                        # Crear URL de alta calidad
+                        imagen = f"https://m.media-amazon.com/images/I/{base_id}_AC_SL1500_.jpg"
+            
+            # Imprimir la URL de la imagen para depuración
+            print(f"URL de imagen Amazon: {imagen}")
             
             # Extraer vendedor (si está disponible)
             vendedor = ""

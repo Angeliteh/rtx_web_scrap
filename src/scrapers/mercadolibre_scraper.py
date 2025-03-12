@@ -108,6 +108,10 @@ def scrape_mercadolibre_page(html_content):
             img_tag = item.find('img', class_='poly-component__picture')
             if img_tag and img_tag.get('src'):
                 imagen = img_tag['src']
+                print(f"URL de imagen original: {imagen}")
+                
+                # Solo registrar la URL original para depuración, pero no transformarla
+                # La transformación se realizará en el frontend mediante handleImageError
             else:
                 # Fallback al método anterior
                 img_tag = item.find('img', class_='ui-search-result-image__element')
@@ -116,6 +120,11 @@ def scrape_mercadolibre_page(html_content):
                         imagen = img_tag['data-src']
                     elif img_tag.get('src'):
                         imagen = img_tag['src']
+                    
+                    print(f"URL de imagen (método fallback): {imagen}")
+            
+            # Imprimir la URL final de la imagen para depuración
+            print(f"URL final de imagen: {imagen}")
             
             # Extraer vendedor - actualizado para la nueva estructura
             vendedor = ""

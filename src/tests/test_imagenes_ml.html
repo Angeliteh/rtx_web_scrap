@@ -1,0 +1,94 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Prueba de Imágenes MercadoLibre</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .container { display: flex; flex-wrap: wrap; }
+            .imagen-test { margin: 10px; padding: 10px; border: 1px solid #ccc; width: 300px; }
+            .imagen-test img { max-width: 100%; max-height: 200px; display: block; margin: 0 auto; }
+            .url { font-size: 10px; word-break: break-all; margin-top: 5px; color: #666; }
+            h2 { color: #333; }
+            .status { font-weight: bold; margin-top: 5px; }
+            .success { color: green; }
+            .error { color: red; }
+        </style>
+    </head>
+    <body>
+        <h1>Prueba de Imágenes de MercadoLibre</h1>
+    
+        <div class="imagen-test">
+            <h2>Imagen 1 (Original (No funciona))</h2>
+            <img src="https://http2.mlstatic.com/D_Q_NP_2X_997944-MLM82618465249_022025-V.webp" onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200?text=Imagen+No+Disponible';">
+            <div class="url">https://http2.mlstatic.com/D_Q_NP_2X_997944-MLM82618465249_022025-V.webp</div>
+            <div class="status success">Estado: FUNCIONA</div>
+        </div>
+        
+        <div class="imagen-test">
+            <h2>Imagen 2 (Original (Funciona))</h2>
+            <img src="https://http2.mlstatic.com/D_Q_NP_2X_644537-MLU73129803450_122023-V.webp" onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200?text=Imagen+No+Disponible';">
+            <div class="url">https://http2.mlstatic.com/D_Q_NP_2X_644537-MLU73129803450_122023-V.webp</div>
+            <div class="status success">Estado: FUNCIONA</div>
+        </div>
+        
+        <div class="imagen-test">
+            <h2>Imagen 3 (Variante 1)</h2>
+            <img src="https://http2.mlstatic.com/D_NQ_NP_2X_997944-MLM82618465249_022025-F.webp" onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200?text=Imagen+No+Disponible';">
+            <div class="url">https://http2.mlstatic.com/D_NQ_NP_2X_997944-MLM82618465249_022025-F.webp</div>
+            <div class="status success">Estado: FUNCIONA</div>
+        </div>
+        
+        <div class="imagen-test">
+            <h2>Imagen 4 (Variante 2)</h2>
+            <img src="https://http2.mlstatic.com/D_NQ_NP_997944-MLM82618465249_022025-F.webp" onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200?text=Imagen+No+Disponible';">
+            <div class="url">https://http2.mlstatic.com/D_NQ_NP_997944-MLM82618465249_022025-F.webp</div>
+            <div class="status success">Estado: FUNCIONA</div>
+        </div>
+        
+        <div class="imagen-test">
+            <h2>Imagen 5 (Variante 3)</h2>
+            <img src="https://http2.mlstatic.com/D_NQ_NP_997944-MLM82618465249_022025-O.webp" onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200?text=Imagen+No+Disponible';">
+            <div class="url">https://http2.mlstatic.com/D_NQ_NP_997944-MLM82618465249_022025-O.webp</div>
+            <div class="status success">Estado: FUNCIONA</div>
+        </div>
+        
+        <div class="imagen-test">
+            <h2>Imagen 6 (Variante 4)</h2>
+            <img src="https://http2.mlstatic.com/D_NQ_NP_997944-MLM82618465249_022025-O.jpg" onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200?text=Imagen+No+Disponible';">
+            <div class="url">https://http2.mlstatic.com/D_NQ_NP_997944-MLM82618465249_022025-O.jpg</div>
+            <div class="status success">Estado: FUNCIONA</div>
+        </div>
+        
+        <div class="imagen-test">
+            <h2>Imagen 7 (Variante 5)</h2>
+            <img src="https://http2.mlstatic.com/D_NQ_NP_997944-MLM82618465249_022025.webp" onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200?text=Imagen+No+Disponible';">
+            <div class="url">https://http2.mlstatic.com/D_NQ_NP_997944-MLM82618465249_022025.webp</div>
+            <div class="status error">Estado: NO FUNCIONA</div>
+        </div>
+        
+        <div class="imagen-test">
+            <h2>Imagen 8 (Variante 6)</h2>
+            <img src="https://http2.mlstatic.com/D_NQ_NP_997944-MLM82618465249_022025.jpg" onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200?text=Imagen+No+Disponible';">
+            <div class="url">https://http2.mlstatic.com/D_NQ_NP_997944-MLM82618465249_022025.jpg</div>
+            <div class="status error">Estado: NO FUNCIONA</div>
+        </div>
+        
+        <div class="imagen-test">
+            <h2>Imagen 9 (Variante 7)</h2>
+            <img src="https://http2.mlstatic.com/D_NQ_NP_997944-F.webp" onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200?text=Imagen+No+Disponible';">
+            <div class="url">https://http2.mlstatic.com/D_NQ_NP_997944-F.webp</div>
+            <div class="status error">Estado: NO FUNCIONA</div>
+        </div>
+        
+        <div class="imagen-test">
+            <h2>Imagen 10 (Variante 8)</h2>
+            <img src="https://http2.mlstatic.com/D_NQ_NP_997944-MLM82618465249-F.webp" onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200?text=Imagen+No+Disponible';">
+            <div class="url">https://http2.mlstatic.com/D_NQ_NP_997944-MLM82618465249-F.webp</div>
+            <div class="status error">Estado: NO FUNCIONA</div>
+        </div>
+        
+    </body>
+    </html>
+    

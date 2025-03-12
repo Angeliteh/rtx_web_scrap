@@ -26,7 +26,7 @@ MONGODB_CONFIG = {
 }
 
 # Modelos a buscar en los sitios web
-MODELOS_BUSQUEDA = ['4060', '4070', '4080', '4090']
+MODELOS_BUSQUEDA = ['4060', '4070']
 
 # Lista de User-Agents para evitar bloqueos
 USER_AGENTS = [

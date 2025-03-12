@@ -4,6 +4,7 @@ import psycopg2
 import pymongo
 from datetime import datetime
 from src.config.config import DATABASE_TYPE, DATABASE_NAME, POSTGRES_CONFIG, MONGODB_CONFIG, PALABRAS_PROHIBIDAS
+import os
 
 def get_db_connection():
     """
@@ -241,52 +242,129 @@ def obtener_historial_precios(id_producto, limite=30):
         limite (int): Número máximo de registros a devolver
         
     Returns:
-        list: Lista de diccionarios con fecha y precio
+        tuple: (historial, info_producto)
+            - historial: Lista de diccionarios con fecha y precio
+            - info_producto: Diccionario con información del producto o None si no existe
     """
-    conn, db_type = get_db_connection()
-    historial = []
-    
-    if db_type == "mongodb":
-        # MongoDB
-        historial_collection = conn['historial_precios']
+    try:
+        # Verificar si la base de datos existe
+        if DATABASE_TYPE != "mongodb" and not os.path.exists(DATABASE_NAME):
+            print(f"Base de datos no encontrada: {DATABASE_NAME}")
+            return [], None
+            
+        conn, db_type = get_db_connection()
+        historial = []
+        info_producto = None
         
-        # Consultar historial
-        registros = historial_collection.find(
-            {"id_producto": id_producto}
-        ).sort("fecha", -1).limit(limite)
+        try:
+            if db_type == "mongodb":
+                # MongoDB
+                productos_collection = conn[MONGODB_CONFIG['collection']]
+                historial_collection = conn['historial_precios']
+                
+                # Obtener información del producto
+                producto = productos_collection.find_one({"id_producto": id_producto})
+                if not producto:
+                    return [], None
+                    
+                info_producto = {
+                    "nombre": producto.get("nombre", ""),
+                    "modelo": producto.get("modelo", ""),
+                    "tienda": producto.get("tienda", ""),
+                    "vendedor": producto.get("vendedor", ""),
+                    "link": producto.get("link", ""),
+                    "imagen": producto.get("imagen", "")
+                }
+                
+                # Obtener historial ordenado por fecha
+                historial_cursor = historial_collection.find(
+                    {"id_producto": id_producto}
+                ).sort("fecha", -1).limit(limite)
+                
+                historial = [{
+                    "fecha": registro["fecha"],
+                    "precio": registro["precio"],
+                    "vendedor": registro.get("vendedor", "")
+                } for registro in historial_cursor]
+                
+            else:
+                # SQLite o PostgreSQL
+                cursor = conn.cursor()
+                
+                # Verificar si la tabla productos existe
+                try:
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='productos'")
+                    if not cursor.fetchone():
+                        print("La tabla 'productos' no existe en la base de datos")
+                        return [], None
+                except Exception as e:
+                    print(f"Error verificando tablas: {e}")
+                    # Continuar de todos modos, por si es PostgreSQL
+                
+                # Obtener información del producto
+                try:
+                    cursor.execute("""
+                        SELECT nombre, modelo, tienda, vendedor, link, imagen
+                        FROM productos
+                        WHERE id_producto = ?
+                    """, (id_producto,))
+                    
+                    producto = cursor.fetchone()
+                    if not producto:
+                        return [], None
+                        
+                    info_producto = {
+                        "nombre": producto[0] if producto[0] else "",
+                        "modelo": producto[1] if producto[1] else "",
+                        "tienda": producto[2] if producto[2] else "",
+                        "vendedor": producto[3] if producto[3] else "",
+                        "link": producto[4] if producto[4] else "",
+                        "imagen": producto[5] if producto[5] else ""
+                    }
+                except Exception as e:
+                    print(f"Error obteniendo información del producto: {e}")
+                    return [], None
+                
+                # Obtener historial
+                try:
+                    cursor.execute("""
+                        SELECT hp.fecha, hp.precio, hp.vendedor
+                        FROM historial_precios hp
+                        JOIN productos p ON hp.producto_id = p.id
+                        WHERE p.id_producto = ?
+                        ORDER BY hp.fecha DESC
+                        LIMIT ?
+                    """, (id_producto, limite))
+                    
+                    historial = [{
+                        "fecha": registro[0] if registro[0] else "",
+                        "precio": registro[1] if registro[1] else 0,
+                        "vendedor": registro[2] if registro[2] else ""
+                    } for registro in cursor.fetchall()]
+                except Exception as e:
+                    print(f"Error obteniendo historial: {e}")
+                    # Si hay error en el historial pero tenemos info del producto,
+                    # devolver producto con historial vacío
+                    if info_producto:
+                        return [], info_producto
+                    return [], None
+                
+            return historial, info_producto
+            
+        except Exception as e:
+            print(f"Error en la consulta a la base de datos: {e}")
+            return [], None
+            
+    except Exception as e:
+        print(f"Error general obteniendo historial de precios: {e}")
+        return [], None
         
-        for registro in registros:
-            historial.append({
-                "fecha": registro["fecha"],
-                "precio": registro["precio"],
-                "vendedor": registro.get("vendedor", "")
-            })
-    else:
-        # SQLite o PostgreSQL
-        cursor = conn.cursor()
-        
-        # Consultar historial
-        cursor.execute('''
-            SELECT h.fecha, h.precio, h.vendedor 
-            FROM historial_precios h
-            JOIN productos p ON h.producto_id = p.id
-            WHERE p.id_producto = ?
-            ORDER BY h.fecha DESC
-            LIMIT ?
-        ''', (id_producto, limite))
-        
-        registros = cursor.fetchall()
-        
-        for registro in registros:
-            historial.append({
-                "fecha": registro[0],
-                "precio": registro[1],
-                "vendedor": registro[2] if registro[2] else ""
-            })
-        
-        conn.close()
-    
-    return historial
+    finally:
+        if 'conn' in locals() and db_type != "mongodb":
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def contiene_palabra_prohibida(nombre):
     """

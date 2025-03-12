@@ -3,8 +3,7 @@ from flask import Flask, render_template, request, jsonify, abort
 from datetime import datetime
 from functools import wraps
 import logging
-import sqlite3
-import os
+
 
 from src.config.config import DATABASE_NAME, SITIOS_HABILITADOS, MODELOS_BUSQUEDA
 from src.database.database import (
@@ -39,24 +38,61 @@ def adaptar_estadisticas(stats):
     Adapta las estadísticas devueltas por la función obtener_estadisticas 
     al formato que espera la plantilla.
     """
-    # Obtenemos todos los precios
-    precios = []
-    for modelo, cantidad in stats.get("por_modelo", {}).items():
-        # Agregamos los precios de este modelo si existen
-        if modelo in stats.get("precio_minimo", {}):
-            precios.append(stats["precio_minimo"][modelo])
-        if modelo in stats.get("precio_maximo", {}):
-            precios.append(stats["precio_maximo"][modelo])
-    
-    # Calculamos estadísticas globales
-    resultado = {
-        "total_productos": stats.get("total_productos", 0),
-        "min_precio": min(precios) if precios else 0,
-        "max_precio": max(precios) if precios else 0,
-        "avg_precio": sum(precios) / len(precios) if precios else 0
-    }
-    
-    return resultado
+    try:
+        # Verificar si hay estadísticas
+        if not stats or not isinstance(stats, dict):
+            return {
+                "total_productos": 0,
+                "min_precio": 0,
+                "max_precio": 0,
+                "avg_precio": 0
+            }
+            
+        # Obtenemos todos los precios
+        precios = []
+        
+        # Intentar obtener precios de diferentes fuentes en el diccionario
+        if 'min_precio' in stats and isinstance(stats['min_precio'], (int, float)):
+            precios.append(stats['min_precio'])
+            
+        if 'max_precio' in stats and isinstance(stats['max_precio'], (int, float)):
+            precios.append(stats['max_precio'])
+            
+        # Buscar precios en el diccionario por_modelo
+        for modelo, datos in stats.get("por_modelo", {}).items():
+            if isinstance(datos, dict):
+                # Agregar precios mínimos y máximos si existen
+                if 'min' in datos and datos['min'] and datos['min'] > 0:
+                    precios.append(datos['min'])
+                if 'max' in datos and datos['max'] and datos['max'] > 0:
+                    precios.append(datos['max'])
+                    
+        # Buscar precios en los diccionarios precio_minimo y precio_maximo
+        for modelo, precio in stats.get("precio_minimo", {}).items():
+            if precio and precio > 0:
+                precios.append(precio)
+                
+        for modelo, precio in stats.get("precio_maximo", {}).items():
+            if precio and precio > 0:
+                precios.append(precio)
+        
+        # Calcular estadísticas globales
+        resultado = {
+            "total_productos": stats.get("total_productos", 0),
+            "min_precio": min(precios) if precios else 0,
+            "max_precio": max(precios) if precios else 0,
+            "avg_precio": sum(precios) / len(precios) if precios else 0
+        }
+        
+        return resultado
+    except Exception as e:
+        logger.error(f"Error adaptando estadísticas: {e}")
+        return {
+            "total_productos": 0,
+            "min_precio": 0,
+            "max_precio": 0,
+            "avg_precio": 0
+        }
 
 def validar_parametros_orden(f):
     """Decorador para validar parámetros de ordenamiento"""
@@ -139,26 +175,59 @@ def index():
 def historial(id_producto):
     """Página de historial de precios de un producto"""
     try:
-        # Obtener historial de precios
-        historial = obtener_historial_precios(id_producto)
+        # Obtener historial de precios e información del producto
+        historial, info_producto = obtener_historial_precios(id_producto)
+        
+        if not info_producto:
+            return render_template('404.html', 
+                                error="Producto no encontrado",
+                                mensaje="El producto que buscas no existe o ha sido eliminado.")
         
         if not historial:
-            abort(404, "Producto no encontrado")
+            # Si el producto existe pero no tiene historial, mostrar mensaje especial
+            return render_template('historial.html',
+                               producto=info_producto,
+                               historial=[],
+                               mensaje="Este producto aún no tiene historial de precios registrado.",
+                               ruta_grafico=None,
+                               formatear_precio=formatear_precio,
+                               now=datetime.now())
             
         # Preparar datos para el gráfico
         fechas = [registro['fecha'] for registro in historial]
         precios = [registro['precio'] for registro in historial]
         
         # Generar gráfico
-        ruta_grafico = generar_grafico_precios(fechas, precios, id_producto)
+        try:
+            ruta_grafico = generar_grafico_precios(fechas, precios, info_producto['nombre'])
+        except Exception as e:
+            logger.error(f"Error generando gráfico: {e}")
+            ruta_grafico = None
+        
+        # Calcular estadísticas del historial
+        if precios:
+            estadisticas_historial = {
+                'precio_minimo': min(precios),
+                'precio_maximo': max(precios),
+                'precio_promedio': sum(precios) / len(precios),
+                'total_registros': len(precios)
+            }
+        else:
+            estadisticas_historial = None
         
         return render_template('historial.html',
+                           producto=info_producto,
                            historial=historial,
                            ruta_grafico=ruta_grafico,
-                           formatear_precio=formatear_precio)
+                           estadisticas=estadisticas_historial,
+                           formatear_precio=formatear_precio,
+                           now=datetime.now())
     except Exception as e:
         logger.error(f"Error al mostrar historial: {e}")
-        return render_template('500.html', error=str(e))
+        return render_template('500.html', 
+                             error="Error al cargar el historial",
+                             mensaje=str(e),
+                             now=datetime.now())
 
 @app.route('/api/productos')
 @validar_parametros_orden
@@ -192,11 +261,15 @@ def actualizar():
 
 @app.errorhandler(404)
 def not_found_error(error):
-    return render_template('404.html', error="Página no encontrada"), 404
+    return render_template('404.html', 
+                          error="Página no encontrada", 
+                          now=datetime.now()), 404
 
 @app.errorhandler(500)
 def internal_error(error):
-    return render_template('500.html', error="Error interno del servidor"), 500
+    return render_template('500.html', 
+                          error="Error interno del servidor", 
+                          now=datetime.now()), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Historial de Precios</title>
+    <title>Historial de Precios - {{ producto.nombre }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -23,13 +23,70 @@
     </header>
     
     <div class="historial-container">
-        <h2>Historial de Precios</h2>
-        
-        <div class="grafico-container">
-            <img src="{{ url_for('static', filename=ruta_grafico) }}" alt="Gráfico de precios" class="grafico-img">
+        <!-- Información del producto -->
+        <div class="producto-info">
+            <div class="producto-imagen" data-store="{{ producto.tienda|lower }}">
+                <img src="{{ producto.imagen }}" 
+                     alt="{{ producto.nombre }}"
+                     onerror="handleImageError(this, '{{ producto.tienda|lower }}')"
+                     onload="handleImageLoad(this, '{{ producto.tienda|lower }}')"
+                     loading="lazy">
+            </div>
+            <div class="producto-detalles">
+                <h2>{{ producto.nombre }}</h2>
+                <p class="producto-modelo">{{ producto.modelo }}</p>
+                <p class="producto-tienda">{{ producto.tienda }}</p>
+                <p class="producto-vendedor">Vendedor: {{ producto.vendedor }}</p>
+                <a href="{{ producto.link }}" target="_blank" class="btn-ver">Ver en Tienda</a>
+            </div>
         </div>
         
+        {% if mensaje %}
+        <div class="mensaje-info">
+            {{ mensaje }}
+        </div>
+        {% endif %}
+        
+        {% if estadisticas %}
+        <div class="estadisticas-historial">
+            <h3>Estadísticas del Historial</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h4>Precio Mínimo</h4>
+                    <p class="stat-value">${{ formatear_precio(estadisticas.precio_minimo) }}</p>
+                </div>
+                <div class="stat-card">
+                    <h4>Precio Máximo</h4>
+                    <p class="stat-value">${{ formatear_precio(estadisticas.precio_maximo) }}</p>
+                </div>
+                <div class="stat-card">
+                    <h4>Precio Promedio</h4>
+                    <p class="stat-value">${{ formatear_precio(estadisticas.precio_promedio) }}</p>
+                </div>
+                <div class="stat-card">
+                    <h4>Total Registros</h4>
+                    <p class="stat-value">{{ estadisticas.total_registros }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if ruta_grafico %}
+        <div class="grafico-container">
+            <h3>Gráfico de Precios</h3>
+            <img src="{{ url_for('static', filename=ruta_grafico) }}" 
+                 alt="Gráfico de precios" 
+                 class="grafico-img"
+                 onerror="this.style.display='none'; document.getElementById('error-grafico').style.display='block';">
+            <div id="error-grafico" style="display:none;" class="error-mensaje">
+                No se pudo cargar el gráfico
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if historial %}
         <div class="tabla-historial">
+            <h3>Registro de Precios</h3>
             <table>
                 <thead>
                     <tr>
@@ -42,17 +99,18 @@
                     {% for registro in historial %}
                     <tr>
                         <td>{{ registro.fecha }}</td>
-                        <td>{{ formatear_precio(registro.precio) }}</td>
+                        <td>${{ formatear_precio(registro.precio) }}</td>
                         <td>{{ registro.vendedor }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        {% endif %}
     </div>
     
     <footer>
-        <p>Monitor de Precios de GPUs &copy; 2025</p>
+        <p>Monitor de Precios de GPUs &copy; {% if now %}{{ now.year }}{% else %}2025{% endif %}</p>
     </footer>
     
     <script>
@@ -80,6 +138,29 @@
                 }
             }
         });
+        
+        // Funciones para manejo de imágenes (reutilizadas del index.html)
+        function handleImageError(img, store) {
+            // Reutilizar la función del index.html
+            if (window.parent.handleImageError) {
+                window.parent.handleImageError(img, store);
+            } else {
+                setDefaultImage(img);
+            }
+        }
+        
+        function handleImageLoad(img, store) {
+            // Reutilizar la función del index.html
+            if (window.parent.handleImageLoad) {
+                window.parent.handleImageLoad(img, store);
+            }
+        }
+        
+        function setDefaultImage(img) {
+            img.src = '/static/img/no-image.png';
+            img.classList.add('imagen-no-disponible');
+            img.parentElement.classList.add('sin-imagen');
+        }
     </script>
 </body>
 </html> 

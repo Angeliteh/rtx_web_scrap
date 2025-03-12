@@ -94,8 +94,12 @@
         <div class="productos-grid">
             {% for producto in productos %}
             <div class="producto-card">
-                <div class="producto-imagen">
-                    <img src="{{ producto.imagen }}" alt="{{ producto.nombre }}" loading="lazy">
+                <div class="producto-imagen" data-store="{{ producto.tienda|lower }}">
+                    <img src="{{ producto.imagen }}" 
+                         alt="{{ producto.nombre }}"
+                         onerror="handleImageError(this, '{{ producto.tienda|lower }}')"
+                         onload="handleImageLoad(this, '{{ producto.tienda|lower }}')"
+                         loading="lazy">
                 </div>
                 <div class="producto-info">
                     <h3 class="producto-nombre" title="{{ producto.nombre }}">{{ producto.nombre }}</h3>
@@ -156,7 +160,200 @@
                     localStorage.setItem('theme', 'light');
                 }
             }
+            
+            // Iniciar precarga de imágenes
+            preloadImages();
         });
+        
+        // Función para precargar imágenes
+        function preloadImages() {
+            const productImages = document.querySelectorAll('.producto-imagen img');
+            
+            productImages.forEach(img => {
+                // Verificar si la imagen ya está cargada
+                if (img.complete) {
+                    handleImageLoad(img, img.parentElement.dataset.store);
+                }
+            });
+        }
+
+        // Manejo de imágenes
+        function handleImageError(img, store) {
+            if (store === 'mercadolibre') {
+                const originalSrc = img.src;
+                console.log("Intentando recuperar imagen de MercadoLibre:", originalSrc);
+                
+                // Si la URL ya ha sido transformada múltiples veces, no seguir intentando
+                if (img.dataset.retryCount && parseInt(img.dataset.retryCount) >= 5) {
+                    console.log("Demasiados intentos fallidos, usando imagen por defecto");
+                    setDefaultImage(img);
+                    return;
+                }
+                
+                // Incrementar contador de intentos
+                img.dataset.retryCount = img.dataset.retryCount ? parseInt(img.dataset.retryCount) + 1 : 1;
+                
+                // Aplicar directamente las transformaciones que sabemos que funcionan
+                if (originalSrc.includes('http2.mlstatic.com')) {
+                    let newSrc;
+                    
+                    // Determinar qué transformación aplicar según el contador de intentos
+                    switch(parseInt(img.dataset.retryCount)) {
+                        case 1:
+                            // Transformación 1: D_Q_NP -> D_NQ_NP y -V.webp -> -F.webp
+                            newSrc = originalSrc.replace('D_Q_NP', 'D_NQ_NP').replace('-V.webp', '-F.webp');
+                            console.log("Aplicando transformación 1:", newSrc);
+                            break;
+                        case 2:
+                            // Transformación 2: D_Q_NP_2X -> D_NQ_NP_2X y -V.webp -> -F.webp
+                            newSrc = originalSrc.replace('D_Q_NP_2X', 'D_NQ_NP_2X').replace('-V.webp', '-F.webp');
+                            console.log("Aplicando transformación 2:", newSrc);
+                            break;
+                        case 3:
+                            // Transformación 3: -V.webp -> -O.webp
+                            newSrc = originalSrc.replace('-V.webp', '-O.webp');
+                            console.log("Aplicando transformación 3:", newSrc);
+                            break;
+                        case 4:
+                            // Transformación 4: -V.webp -> -O.jpg
+                            newSrc = originalSrc.replace('-V.webp', '-O.jpg');
+                            console.log("Aplicando transformación 4:", newSrc);
+                            break;
+                        case 5:
+                            // Transformación 5: Extraer ID y construir completamente nueva URL
+                            try {
+                                const idMatch = originalSrc.match(/D_[QN][_Q]?NP(?:_2X)?_([^-]+)-[VFOW]/i);
+                                if (idMatch && idMatch[1]) {
+                                    const baseUrl = originalSrc.split('/D_')[0];
+                                    newSrc = `${baseUrl}/D_NQ_NP_${idMatch[1]}-O.jpg`;
+                                    console.log("Aplicando transformación 5 (reconstrucción):", newSrc);
+                                } else {
+                                    setDefaultImage(img);
+                                    return;
+                                }
+                            } catch (e) {
+                                console.error("Error en transformación 5:", e);
+                                setDefaultImage(img);
+                                return;
+                            }
+                            break;
+                        default:
+                            setDefaultImage(img);
+                            return;
+                    }
+                    
+                    // Aplicar la nueva URL
+                    img.src = newSrc;
+                } else {
+                    setDefaultImage(img);
+                }
+            } else if (store === 'amazon') {
+                const originalSrc = img.src;
+                console.log("Intentando recuperar imagen de Amazon:", originalSrc);
+                
+                try {
+                    // Extraer el ID base de la imagen
+                    const baseIdMatch = originalSrc.match(/I\/([^._]+)/);
+                    if (baseIdMatch) {
+                        const baseId = baseIdMatch[1];
+                        
+                        // Array de formatos de imagen ordenados por calidad
+                        const formats = [
+                            '_AC_SL1500_',
+                            '_AC_UL1500_',
+                            '_AC_UL1200_',
+                            '_AC_UL800_',
+                            '_AC_UL640_',
+                            '_AC_UL320_',
+                            ''
+                        ];
+                        
+                        if (!img.dataset.retryCount) {
+                            img.dataset.retryCount = '0';
+                        }
+                        
+                        const retryCount = parseInt(img.dataset.retryCount);
+                        if (retryCount < formats.length) {
+                            const format = formats[retryCount];
+                            const newSrc = `https://m.media-amazon.com/images/I/${baseId}${format}.jpg`;
+                            console.log(`Intento ${retryCount+1}/${formats.length}: ${newSrc}`);
+                            img.src = newSrc;
+                            img.dataset.retryCount = (retryCount + 1).toString();
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error procesando imagen de Amazon:", e);
+                }
+                
+                setDefaultImage(img);
+            } else {
+                setDefaultImage(img);
+            }
+        }
+
+        function setDefaultImage(img) {
+            console.log("Usando imagen por defecto para:", img.alt);
+            img.src = '/static/img/no-image.png';
+            img.classList.add('imagen-no-disponible');
+            img.parentElement.classList.add('sin-imagen');
+            img.parentElement.setAttribute('title', 'Imagen no disponible');
+            
+            // Intentar mostrar el nombre del producto en la imagen
+            const nombreProducto = img.alt || 'Producto';
+            const container = img.parentElement;
+            
+            // Agregar un texto descriptivo sobre la imagen
+            if (!container.querySelector('.nombre-sobre-imagen')) {
+                const nombreElement = document.createElement('div');
+                nombreElement.className = 'nombre-sobre-imagen';
+                nombreElement.textContent = nombreProducto.length > 50 ? 
+                    nombreProducto.substring(0, 50) + '...' : nombreProducto;
+                container.appendChild(nombreElement);
+            }
+        }
+
+        function handleImageLoad(img, store) {
+            // Eliminar el contador de reintentos cuando la imagen carga correctamente
+            if (img.dataset.retryCount) {
+                console.log(`Imagen cargada correctamente después de ${img.dataset.retryCount} intentos: ${img.src}`);
+            }
+            
+            // Agregar clase específica según la tienda
+            if (store === 'mercadolibre') {
+                img.classList.add('ml-image');
+                
+                // Para Mercado Libre, verificar si debemos mejorar la calidad
+                if (!img.src.includes('no-image.png') && !img.src.includes('-F.webp') && !img.src.includes('-O.webp') && !img.src.includes('-O.jpg')) {
+                    console.log("Imagen de MercadoLibre cargada, pero posiblemente en baja calidad:", img.src);
+                    
+                    // Si la imagen cargada contiene '-V.webp', intentar mejorarla automáticamente
+                    if (img.src.includes('-V.webp')) {
+                        console.log("Intentando mejorar calidad automáticamente");
+                        img.dataset.retryCount = '0'; // Reiniciar contador
+                        handleImageError(img, store);
+                        return;
+                    }
+                }
+            } else if (store === 'amazon') {
+                img.classList.add('amazon-image');
+            }
+            
+            // Solo verificar el tamaño si la imagen no es la imagen por defecto
+            if (!img.src.includes('no-image.png')) {
+                // Verificar si la imagen cargada es de calidad suficiente
+                if (img.naturalWidth < 100 || img.naturalHeight < 100) {
+                    console.log(`Imagen de baja calidad: ${img.naturalWidth}x${img.naturalHeight} - ${img.src}`);
+                    // Reiniciar contador de intentos
+                    img.dataset.retryCount = '0';
+                    // Intentar cargar una versión de mayor calidad
+                    handleImageError(img, store);
+                } else {
+                    // Imagen de buena calidad, limpiar flag de reintento
+                    delete img.dataset.retryCount;
+                }
+            }
+        }
     </script>
 </body>
 </html>
