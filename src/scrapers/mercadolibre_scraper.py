@@ -1,7 +1,25 @@
 from bs4 import BeautifulSoup
 import re
-from filters import filtrar_productos_irrelevantes
-from scrapers.base_scraper import crear_producto_base, filtrar_productos_validos
+from src.utils.filters import filtrar_productos_irrelevantes
+from src.scrapers.base_scraper import detectar_modelo, crear_producto_base, filtrar_productos_validos
+
+def extraer_precio_mercadolibre(precio_tag):
+    """
+    Extrae el precio de un elemento de MercadoLibre.
+    """
+    try:
+        if not precio_tag:
+            return 0.0
+            
+        precio_text = precio_tag.text.strip()
+        # Extraer solo números y punto decimal
+        precio_limpio = re.sub(r'[^\d]', '', precio_text)
+        if precio_limpio:
+            return float(precio_limpio)
+        return 0.0
+    except (ValueError, AttributeError) as e:
+        print(f"Error extrayendo precio de MercadoLibre: {e}")
+        return 0.0
 
 def scrape_mercadolibre_page(html_content):
     """
@@ -19,26 +37,37 @@ def scrape_mercadolibre_page(html_content):
     productos = []
     ids_vistos = set()  # Para evitar duplicados
     
+    print(f"Analizando página de MercadoLibre. Longitud HTML: {len(html_content)}")
+    
     # Buscar los contenedores de productos - actualizado para incluir la nueva clase
     items = soup.find_all('li', class_=lambda c: c and ('ui-search-layout__item' in c))
+    
+    # Si no se encuentran con el selector anterior, probar con el nuevo formato
+    if not items:
+        items = soup.find_all('div', class_=lambda c: c and ('poly-card' in c))
+        print(f"Usando selector alternativo (poly-card). Encontrados: {len(items)} items")
+    
+    print(f"Total de items encontrados: {len(items)}")
     
     for item in items:
         try:
             # Buscar el enlace del producto - actualizado para la nueva estructura
-            link_tag = None
+            link = ""
             
             # Buscar en la nueva estructura (poly-component__title)
             titulo_tag = item.find('a', class_='poly-component__title')
             if titulo_tag and titulo_tag.get('href'):
-                link_tag = titulo_tag
+                link = titulo_tag['href']
+                nombre = titulo_tag.text.strip()
             else:
                 # Mantener la búsqueda anterior como fallback
                 link_tag = item.find('a', class_='ui-search-item__group__element')
-            
-            if not link_tag or not link_tag.get('href'):
-                continue
-                
-            link = link_tag['href']
+                if link_tag and link_tag.get('href'):
+                    link = link_tag['href']
+                    nombre_tag = item.find('h2', class_='ui-search-item__title')
+                    nombre = nombre_tag.text.strip() if nombre_tag else "Nombre no disponible"
+                else:
+                    continue
             
             # Extraer ID del producto de la URL con una expresión regular más robusta
             # Buscamos patrones como /p/MLM12345678, /MLM-12345678, etc.
@@ -58,43 +87,21 @@ def scrape_mercadolibre_page(html_content):
                 
             ids_vistos.add(producto_id)
             
-            # Extraer nombre - actualizado para la nueva estructura
-            nombre = "Nombre no disponible"
-            nombre_tag = item.find('a', class_='poly-component__title')
-            if nombre_tag:
-                nombre = nombre_tag.text.strip()
-            else:
-                # Fallback al método anterior
-                nombre_tag = item.find('h2', class_='ui-search-item__title')
-                if nombre_tag:
-                    nombre = nombre_tag.text.strip()
-            
             # Extraer precio - actualizado para la nueva estructura
             precio = 0.0
             
-            # Buscar el precio en el formato del nuevo HTML
+            # Buscar el precio en el formato del nuevo HTML (poly-component)
             precio_tag = item.find('span', class_='andes-money-amount__fraction')
             if precio_tag:
-                precio_text = precio_tag.text.replace('.', '').replace(',', '').strip()
-                
-                try:
-                    precio = float(precio_text)
-                except ValueError:
-                    precio = 0.0
+                precio = extraer_precio_mercadolibre(precio_tag)
             else:
                 # Fallback al método anterior
                 precio_tag = item.find('span', class_='price-tag-fraction')
                 if precio_tag:
-                    precio_text = precio_tag.text.replace('.', '').strip()
-                    
-                    # Manejar decimales si existen
-                    decimales_tag = item.find('span', class_='price-tag-cents')
-                    decimales = decimales_tag.text.strip() if decimales_tag else "00"
-                    
-                    try:
-                        precio = float(f"{precio_text}.{decimales}")
-                    except ValueError:
-                        precio = 0.0
+                    precio = extraer_precio_mercadolibre(precio_tag)
+            
+            if precio <= 0:
+                continue
             
             # Extraer imagen - actualizado para la nueva estructura
             imagen = ""
@@ -132,13 +139,26 @@ def scrape_mercadolibre_page(html_content):
                 vendedor=vendedor
             )
             
+            print(f"Producto encontrado: {nombre[:50]}... - ${precio}")
             productos.append(producto)
         except Exception as e:
             print(f"Error procesando producto de MercadoLibre: {e}")
     
     # Filtrar productos con precio mayor a 0 y modelo reconocido
-    productos = filtrar_productos_validos(productos)
+    productos_validos = filtrar_productos_validos(productos)
     # Aplicar filtro para descartar productos irrelevantes
-    productos = filtrar_productos_irrelevantes(productos)
+    productos_filtrados = filtrar_productos_irrelevantes(productos_validos)
     
-    return productos 
+    print(f"Total de productos encontrados: {len(productos)}")
+    print(f"Total de productos con modelo reconocido: {len(productos_validos)}")
+    print(f"Total de productos válidos después de filtrar: {len(productos_filtrados)}")
+    
+    # Si no hay productos válidos pero sí hay productos, incluir algunos aunque no tengan modelo reconocido
+    if len(productos_filtrados) == 0 and len(productos) > 0:
+        print("No se encontraron productos válidos, incluyendo algunos sin modelo reconocido...")
+        # Filtrar solo por precio y palabras prohibidas
+        productos_filtrados = [p for p in productos if p['precio'] > 0]
+        productos_filtrados = filtrar_productos_irrelevantes(productos_filtrados)
+        print(f"Total de productos incluidos sin filtro de modelo: {len(productos_filtrados)}")
+    
+    return productos_filtrados 

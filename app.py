@@ -1,301 +1,202 @@
 # app.py
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, abort
+from datetime import datetime
+from functools import wraps
+import logging
 import sqlite3
-from datetime import datetime, timedelta
-from config import DATABASE_NAME, SITIOS_HABILITADOS, MODELOS_BUSQUEDA
+import os
+
+from src.config.config import DATABASE_NAME, SITIOS_HABILITADOS, MODELOS_BUSQUEDA
+from src.database.database import (
+    crear_tabla,
+    get_db_connection,
+    obtener_historial_precios,
+    obtener_productos_actuales,
+    obtener_estadisticas,
+    obtener_todos_productos
+)
 from main import ejecutar_scraper
-from database import crear_tabla, get_db_connection, obtener_historial_precios
+from src.utils.analysis import generar_grafico_precios
+from src.utils.utils import formatear_precio
 
-app = Flask(__name__)
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Crear la tabla al iniciar Flask (por si no existe)
-crear_tabla()
+# Inicialización de Flask con la ruta correcta de templates
+app = Flask(__name__, 
+           template_folder='src/templates',
+           static_folder='src/static')
 
-def obtener_productos(tienda=None, modelo=None, ordenar_por="precio", orden="ASC", limite=100):
+# Crear la tabla al iniciar Flask
+try:
+    crear_tabla()
+except Exception as e:
+    logger.error(f"Error al crear la tabla: {e}")
+
+def adaptar_estadisticas(stats):
     """
-    Obtiene los productos almacenados en la base de datos con opciones de filtrado.
-    
-    Args:
-        tienda (str, opcional): Filtrar por tienda específica
-        modelo (str, opcional): Filtrar por modelo específico
-        ordenar_por (str): Campo por el que ordenar (precio, nombre, fecha)
-        orden (str): Orden ascendente (ASC) o descendente (DESC)
-        limite (int): Número máximo de productos a devolver
-        
-    Returns:
-        list: Lista de productos
+    Adapta las estadísticas devueltas por la función obtener_estadisticas 
+    al formato que espera la plantilla.
     """
-    conn, db_type = get_db_connection()
+    # Obtenemos todos los precios
+    precios = []
+    for modelo, cantidad in stats.get("por_modelo", {}).items():
+        # Agregamos los precios de este modelo si existen
+        if modelo in stats.get("precio_minimo", {}):
+            precios.append(stats["precio_minimo"][modelo])
+        if modelo in stats.get("precio_maximo", {}):
+            precios.append(stats["precio_maximo"][modelo])
     
-    if db_type == "mongodb":
-        # MongoDB
-        collection = conn['productos']
-        
-        # Construir filtro
-        filtro = {}
-        if tienda:
-            filtro["tienda"] = tienda
-        if modelo:
-            filtro["modelo"] = modelo
-            
-        # Ordenar
-        orden_valor = 1 if orden == "ASC" else -1
-        ordenacion = [(ordenar_por, orden_valor)]
-        
-        # Ejecutar consulta
-        cursor = collection.find(filtro).sort(ordenacion).limit(limite)
-        productos = list(cursor)
-        
-    else:
-        # SQLite o PostgreSQL
-        cursor = conn.cursor()
-        
-        # Construir consulta SQL base
-        query = """
-            SELECT id, tienda, modelo, nombre, precio, fecha, vendedor, link, imagen, id_producto 
-            FROM productos 
-            WHERE 1=1
-        """
-        params = []
-        
-        # Añadir filtros si existen
-        if tienda:
-            query += " AND tienda = ?"
-            params.append(tienda)
-        if modelo:
-            query += " AND modelo = ?"
-            params.append(modelo)
-            
-        # Añadir ordenación
-        query += f" ORDER BY {ordenar_por} {orden}"
-        
-        # Añadir límite
-        query += " LIMIT ?"
-        params.append(limite)
-        
-        # Verificar si hay productos en la base de datos
-        cursor.execute("SELECT COUNT(*) FROM productos")
-        cantidad_productos = cursor.fetchone()[0]
-
-        if cantidad_productos == 0:
-            print("⚠️ No hay productos en la base de datos. Ejecutando el scraper...")
-            ejecutar_scraper()  # Llamamos al scraper automáticamente
-            
-            # Volver a ejecutar la consulta después del scraping
-            cursor.execute(query, params)
-        else:
-            # Ejecutar la consulta con los parámetros
-            cursor.execute(query, params)
-            
-        # Obtener resultados
-        productos = []
-        for row in cursor.fetchall():
-            productos.append({
-                'id': row[0],
-                'tienda': row[1],
-                'modelo': row[2],
-                'nombre': row[3],
-                'precio': row[4],
-                'fecha': row[5],
-                'vendedor': row[6],
-                'link': row[7],
-                'imagen': row[8],
-                'id_producto': row[9]
-            })
-        
-        # Cerrar conexión
-        conn.close()
-        
-    return productos
-
-def obtener_estadisticas():
-    """
-    Obtiene estadísticas generales sobre los productos.
-    
-    Returns:
-        dict: Diccionario con estadísticas
-    """
-    conn, db_type = get_db_connection()
-    
-    if db_type == "mongodb":
-        # MongoDB
-        collection = conn['productos']
-        
-        # Obtener tiendas únicas
-        tiendas = collection.distinct("tienda")
-        
-        # Obtener modelos únicos
-        modelos = collection.distinct("modelo")
-        
-        # Obtener precio mínimo, máximo y promedio
-        pipeline = [
-            {
-                "$group": {
-                    "_id": None,
-                    "min_precio": {"$min": "$precio"},
-                    "max_precio": {"$max": "$precio"},
-                    "avg_precio": {"$avg": "$precio"},
-                    "total": {"$sum": 1}
-                }
-            }
-        ]
-        
-        resultado = list(collection.aggregate(pipeline))
-        if resultado:
-            stats = resultado[0]
-            min_precio = stats["min_precio"]
-            max_precio = stats["max_precio"]
-            avg_precio = stats["avg_precio"]
-            total_productos = stats["total"]
-        else:
-            min_precio = max_precio = avg_precio = 0
-            total_productos = 0
-            
-    else:
-        # SQLite o PostgreSQL
-        cursor = conn.cursor()
-        
-        # Obtener tiendas únicas
-        cursor.execute("SELECT DISTINCT tienda FROM productos")
-        tiendas = [row[0] for row in cursor.fetchall()]
-        
-        # Obtener modelos únicos
-        cursor.execute("SELECT DISTINCT modelo FROM productos")
-        modelos = [row[0] for row in cursor.fetchall()]
-        
-        # Obtener precio mínimo, máximo y promedio
-        cursor.execute("SELECT MIN(precio), MAX(precio), AVG(precio), COUNT(*) FROM productos")
-        min_precio, max_precio, avg_precio, total_productos = cursor.fetchone()
-        
-        # Cerrar conexión
-        conn.close()
-    
-    return {
-        'tiendas': tiendas,
-        'modelos': modelos,
-        'min_precio': min_precio,
-        'max_precio': max_precio,
-        'avg_precio': avg_precio,
-        'total_productos': total_productos
+    # Calculamos estadísticas globales
+    resultado = {
+        "total_productos": stats.get("total_productos", 0),
+        "min_precio": min(precios) if precios else 0,
+        "max_precio": max(precios) if precios else 0,
+        "avg_precio": sum(precios) / len(precios) if precios else 0
     }
+    
+    return resultado
+
+def validar_parametros_orden(f):
+    """Decorador para validar parámetros de ordenamiento"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        ordenar_por = request.args.get('ordenar_por', 'precio')
+        orden = request.args.get('orden', 'ASC').upper()
+        
+        campos_validos = {'precio', 'nombre', 'fecha', 'tienda', 'modelo'}
+        ordenes_validos = {'ASC', 'DESC'}
+        
+        if ordenar_por not in campos_validos:
+            abort(400, f"Campo de ordenamiento inválido. Debe ser uno de: {', '.join(campos_validos)}")
+        if orden not in ordenes_validos:
+            abort(400, f"Orden inválido. Debe ser uno de: {', '.join(ordenes_validos)}")
+            
+        return f(*args, **kwargs)
+    return decorated_function
+
+def row_to_dict(row, columns):
+    """Convierte una fila SQL en un diccionario"""
+    return {columns[i]: value for i, value in enumerate(row)}
 
 @app.route('/')
+@validar_parametros_orden
 def index():
-    """
-    Página principal que muestra los productos en una tabla con opciones de filtrado.
-    """
-    # Obtener parámetros de filtrado
-    tienda = request.args.get('tienda')
-    modelo = request.args.get('modelo')
-    ordenar_por = request.args.get('ordenar_por', 'precio')
-    orden = request.args.get('orden', 'ASC')
-    
-    # Obtener productos filtrados
-    productos = obtener_productos(tienda, modelo, ordenar_por, orden)
-    
-    # Obtener estadísticas
-    estadisticas = obtener_estadisticas()
-    
-    return render_template(
-        'index.html', 
-        productos=productos, 
-        estadisticas=estadisticas,
-        tiendas=estadisticas['tiendas'],
-        modelos=estadisticas['modelos'],
-        filtros={
-            'tienda': tienda,
-            'modelo': modelo,
-            'ordenar_por': ordenar_por,
-            'orden': orden
-        },
-        now=datetime.now()  # Aquí pasamos la variable `now`
-    )
+    """Página principal"""
+    try:
+        # Obtener parámetros de filtrado y ordenamiento
+        tienda = request.args.get('tienda')
+        modelo = request.args.get('modelo')
+        ordenar_por = request.args.get('ordenar_por', 'precio')
+        orden = request.args.get('orden', 'ASC')
+        
+        # Parámetros de paginación
+        page = request.args.get('page', 1, type=int)
+        per_page = 12  # Número de productos por página
+        
+        # Obtener productos con filtros y ordenamiento
+        filtros = {}
+        if tienda:
+            filtros['tienda'] = tienda
+        if modelo:
+            filtros['modelo'] = modelo
+            
+        # Obtener todos los productos filtrados y ordenados
+        todos_productos = obtener_todos_productos(filtros, ordenar_por=ordenar_por, orden=orden)
+        
+        # Calcular la paginación
+        total_productos = len(todos_productos)
+        total_pages = (total_productos + per_page - 1) // per_page
+        
+        # Asegurar que la página actual es válida
+        page = max(1, min(page, total_pages))
+        
+        # Obtener los productos de la página actual
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        productos_paginados = todos_productos[start_idx:end_idx]
+        
+        stats = obtener_estadisticas()
+        estadisticas = adaptar_estadisticas(stats)
+        
+        return render_template('index.html',
+                           productos=productos_paginados,
+                           total_productos=total_productos,
+                           page=page,
+                           total_pages=total_pages,
+                           estadisticas=estadisticas,
+                           tiendas=SITIOS_HABILITADOS,
+                           modelos=MODELOS_BUSQUEDA,
+                           formatear_precio=formatear_precio,
+                           filtros={'tienda': tienda, 'modelo': modelo, 'ordenar_por': ordenar_por, 'orden': orden},
+                           now=datetime.now())
+    except Exception as e:
+        logger.error(f"Error en la página principal: {e}")
+        return render_template('500.html', error=str(e))
 
 @app.route('/historial/<id_producto>')
 def historial(id_producto):
-    """
-    Página que muestra el historial de precios de un producto específico.
-    """
-    # Obtener el producto
-    conn, db_type = get_db_connection()
-    
-    if db_type == "mongodb":
-        # MongoDB
-        collection = conn['productos']
-        producto = collection.find_one({"id_producto": id_producto})
-    else:
-        # SQLite o PostgreSQL
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, tienda, modelo, nombre, precio, fecha, vendedor, link, imagen, id_producto FROM productos WHERE id_producto = ?", 
-            (id_producto,)
-        )
-        row = cursor.fetchone()
+    """Página de historial de precios de un producto"""
+    try:
+        # Obtener historial de precios
+        historial = obtener_historial_precios(id_producto)
         
-        if row:
-            producto = {
-                'id': row[0],
-                'tienda': row[1],
-                'modelo': row[2],
-                'nombre': row[3],
-                'precio': row[4],
-                'fecha': row[5],
-                'vendedor': row[6],
-                'link': row[7],
-                'imagen': row[8],
-                'id_producto': row[9]
-            }
-        else:
-            producto = None
+        if not historial:
+            abort(404, "Producto no encontrado")
             
-        # Cerrar conexión
-        conn.close()
-    
-    if not producto:
-        return "Producto no encontrado", 404
-    
-    # Obtener historial de precios
-    historial = obtener_historial_precios(id_producto, limite=30)
-    
-    # Preparar datos para el gráfico
-    fechas = []
-    precios = []
-    
-    for registro in historial:
-        fechas.append(registro['fecha'])
-        precios.append(registro['precio'])
-    
-    return render_template(
-        'historial.html',
-        producto=producto,
-        historial=historial,
-        fechas=fechas,
-        precios=precios
-    )
+        # Preparar datos para el gráfico
+        fechas = [registro['fecha'] for registro in historial]
+        precios = [registro['precio'] for registro in historial]
+        
+        # Generar gráfico
+        ruta_grafico = generar_grafico_precios(fechas, precios, id_producto)
+        
+        return render_template('historial.html',
+                           historial=historial,
+                           ruta_grafico=ruta_grafico,
+                           formatear_precio=formatear_precio)
+    except Exception as e:
+        logger.error(f"Error al mostrar historial: {e}")
+        return render_template('500.html', error=str(e))
 
 @app.route('/api/productos')
+@validar_parametros_orden
 def api_productos():
-    """
-    API para obtener productos en formato JSON.
-    """
-    # Obtener parámetros de filtrado
-    tienda = request.args.get('tienda')
-    modelo = request.args.get('modelo')
-    ordenar_por = request.args.get('ordenar_por', 'precio')
-    orden = request.args.get('orden', 'ASC')
-    
-    # Obtener productos filtrados
-    productos = obtener_productos(tienda, modelo, ordenar_por, orden)
-    
-    return jsonify(productos)
+    """API para obtener productos"""
+    try:
+        tienda = request.args.get('tienda')
+        modelo = request.args.get('modelo')
+        
+        filtros = {}
+        if tienda:
+            filtros['tienda'] = tienda
+        if modelo:
+            filtros['modelo'] = modelo
+            
+        productos = obtener_todos_productos(filtros)
+        return jsonify(productos)
+    except Exception as e:
+        logger.error(f"Error en API productos: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/actualizar')
 def actualizar():
-    """
-    Ejecuta el scraper manualmente y redirige a la página principal.
-    """
-    ejecutar_scraper()
-    return render_template('actualizar.html')
+    """Actualiza los productos ejecutando el scraper"""
+    try:
+        ejecutar_scraper()
+        return jsonify({"mensaje": "Productos actualizados correctamente"})
+    except Exception as e:
+        logger.error(f"Error al actualizar productos: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('404.html', error="Página no encontrada"), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return render_template('500.html', error="Error interno del servidor"), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

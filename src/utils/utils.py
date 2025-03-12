@@ -4,10 +4,12 @@ Utilidades para el scraping de datos, como funciones para realizar peticiones HT
 obtener User-Agents aleatorios, etc.
 """
 
-import random
 import requests
 import time
-from config import DELAY_ENTRE_PETICIONES, TIMEOUT_PETICIONES, REINTENTOS_PETICIONES
+import random
+from datetime import datetime
+from bs4 import BeautifulSoup
+from src.config.config import DELAY_ENTRE_PETICIONES, TIMEOUT_PETICIONES, REINTENTOS_PETICIONES
 
 # Lista de User-Agents para simular diferentes navegadores
 USER_AGENTS = [
@@ -59,11 +61,24 @@ def fetch_page(url, use_selenium=False, use_playwright=False):
     Returns:
         str: Contenido HTML de la página
     """
-    # Usar Selenium por defecto para MercadoLibre
+    # Usar Selenium por defecto solo para MercadoLibre
     if 'mercadolibre' in url.lower() and not use_playwright:
         use_selenium = True
         
     try:
+        # Primero intentar con requests para mayor velocidad
+        if not use_selenium and not use_playwright:
+            html = fetch_with_requests(url)
+            # Si obtenemos contenido y es una página de Amazon, verificar si contiene productos
+            if html and 'amazon' in url.lower():
+                soup = BeautifulSoup(html, 'html.parser')
+                # Verificar si hay resultados de búsqueda
+                if not soup.find_all('div', {'data-component-type': 's-search-result'}) and not soup.find_all('div', class_=lambda c: c and ('s-result-item' in c)):
+                    print("No se encontraron productos con requests, intentando con Selenium...")
+                    use_selenium = True
+                    return fetch_with_selenium(url)
+            return html
+            
         if use_selenium:
             return fetch_with_selenium(url)
         elif use_playwright:
@@ -189,3 +204,17 @@ def fetch_with_playwright(url):
     except Exception as e:
         print(f"⚠️ Error al usar Playwright para {url}: {e}")
         return None
+
+def formatear_precio(precio):
+    """
+    Formatea un precio en formato moneda (MXN).
+    
+    Args:
+        precio (float): Precio a formatear
+        
+    Returns:
+        str: Precio formateado (ej: $1,234.56 MXN)
+    """
+    if precio is None:
+        return "N/A"
+    return f"${precio:,.2f} MXN"

@@ -1,7 +1,44 @@
 # analysis.py
 import sqlite3
 import matplotlib.pyplot as plt
-from config import DATABASE_NAME, MODELOS_BUSQUEDA, MOSTRAR_GRAFICO
+import numpy as np
+from datetime import datetime, timedelta
+from src.config.config import DATABASE_NAME, MODELOS_BUSQUEDA, MOSTRAR_GRAFICO
+
+def generar_grafico_precios(fechas, precios, nombre_producto):
+    """
+    Genera un gráfico de línea con el historial de precios de un producto.
+    
+    Args:
+        fechas (list): Lista de fechas
+        precios (list): Lista de precios correspondientes a las fechas
+        nombre_producto (str): Nombre del producto para el título del gráfico
+        
+    Returns:
+        str: Ruta del archivo del gráfico generado (relativa a /static)
+    """
+    plt.figure(figsize=(10, 6))
+    plt.plot(fechas, precios, marker='o')
+    
+    # Configurar el gráfico
+    plt.title(f'Historial de Precios - {nombre_producto}')
+    plt.xlabel('Fecha')
+    plt.ylabel('Precio (MXN)')
+    plt.grid(True)
+    
+    # Rotar las etiquetas de fecha para mejor legibilidad
+    plt.xticks(rotation=45)
+    
+    # Ajustar el layout para que no se corten las etiquetas
+    plt.tight_layout()
+    
+    # Guardar el gráfico
+    ruta_fisica = 'src/static/img/grafico_precios.png'
+    plt.savefig(ruta_fisica)
+    plt.close()
+    
+    # Devolver la ruta relativa a la carpeta static
+    return 'img/grafico_precios.png'
 
 def obtener_estadisticas():
     """

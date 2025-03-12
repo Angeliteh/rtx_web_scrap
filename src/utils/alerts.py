@@ -3,13 +3,20 @@ import smtplib
 import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import telegram
+from discord_webhook import DiscordWebhook
 from datetime import datetime
-from config import (
-    ALERTA_ACTIVADA, UMBRAL_PRECIO_PORCENTAJE, EMAIL_ALERTAS,
-    TELEGRAM_ACTIVADO, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
-    DISCORD_ACTIVADO, DISCORD_WEBHOOK_URL
+from src.config.config import (
+    ALERTA_ACTIVADA,
+    EMAIL_ALERTAS,
+    TELEGRAM_ACTIVADO,
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID,
+    DISCORD_ACTIVADO,
+    DISCORD_WEBHOOK_URL,
+    UMBRAL_PRECIO_PORCENTAJE
 )
-from database import obtener_historial_precios
+from src.database.database import obtener_historial_precios
 
 def calcular_porcentaje_cambio(precio_actual, precio_anterior):
     """

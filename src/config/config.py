@@ -39,7 +39,9 @@ USER_AGENTS = [
 # Lista de palabras prohibidas para filtrar productos irrelevantes (no GPUs)
 PALABRAS_PROHIBIDAS = [
     "soporte", "stand", "cable", "hub", "extensor", "base",
-    "refrigeración", "extensión", "adaptador", "computadora", "estación", "laptop", "placa"
+    "refrigeración", "extensión", "adaptador", "computadora", "estación", "laptop", "placa",
+    "pines", "pin", "awg", "pc", "water", "block", "hybrid", "icue", "aegis", "personalizada",
+    "t3for", "k4for", "atx3.0", "pci-e", "procesador"
 ]
 
 # Configuración para alertas de precios

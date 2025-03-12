@@ -1,17 +1,25 @@
 <!-- templates/index.html -->
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitor de Precios de GPUs</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <header>
         <h1>Monitor de Precios de GPUs</h1>
         <p>Comparador de precios de tarjetas gráficas NVIDIA RTX en diferentes tiendas</p>
+        
+        <!-- Interruptor de Modo Oscuro -->
+        <div class="theme-switch-wrapper">
+            <label class="theme-switch" for="checkbox">
+                <input type="checkbox" id="checkbox" />
+                <div class="slider"></div>
+            </label>
+        </div>
     </header>
     
     <div class="estadisticas">
@@ -35,13 +43,13 @@
     
     <div class="filtros">
         <h2>Filtros</h2>
-        <form action="/" method="get">
+        <form action="/" method="get" id="filtrosForm">
             <div class="filtro-grupo">
                 <label for="tienda">Tienda:</label>
                 <select name="tienda" id="tienda">
                     <option value="">Todas las tiendas</option>
                     {% for tienda in tiendas %}
-                    <option value="{{ tienda }}" {% if filtros.tienda == tienda %}selected{% endif %}>{{ tienda }}</option>
+                    <option value="{{ tienda|lower }}" {% if filtros.tienda == tienda|lower %}selected{% endif %}>{{ tienda|title }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -51,7 +59,7 @@
                 <select name="modelo" id="modelo">
                     <option value="">Todos los modelos</option>
                     {% for modelo in modelos %}
-                    <option value="{{ modelo }}" {% if filtros.modelo == modelo %}selected{% endif %}>{{ modelo }}</option>
+                    <option value="{{ modelo }}" {% if filtros.modelo == modelo %}selected{% endif %}>RTX {{ modelo }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -74,13 +82,14 @@
             </div>
             
             <button type="submit" class="btn-filtrar">Aplicar Filtros</button>
+            <button type="button" class="btn-limpiar" onclick="window.location.href='/'">Limpiar Filtros</button>
         </form>
         
         <a href="/actualizar" class="btn-actualizar">Actualizar Precios</a>
     </div>
     
     <div class="productos-container">
-        <h2>Lista de Tarjetas Gráficas ({{ productos|length }} resultados)</h2>
+        <h2>Lista de Tarjetas Gráficas ({{ total_productos }} resultados)</h2>
         
         <div class="productos-grid">
             {% for producto in productos %}
@@ -89,7 +98,7 @@
                     <img src="{{ producto.imagen }}" alt="{{ producto.nombre }}" loading="lazy">
                 </div>
                 <div class="producto-info">
-                    <h3 class="producto-nombre">{{ producto.nombre }}</h3>
+                    <h3 class="producto-nombre" title="{{ producto.nombre }}">{{ producto.nombre }}</h3>
                     <p class="producto-modelo">{{ producto.modelo }}</p>
                     <p class="producto-tienda">{{ producto.tienda }}</p>
                     <p class="producto-precio">${{ "%.2f"|format(producto.precio) }}</p>
@@ -102,6 +111,21 @@
             </div>
             {% endfor %}
         </div>
+
+        <!-- Controles de paginación -->
+        {% if total_pages > 1 %}
+        <div class="paginacion">
+            {% if page > 1 %}
+            <a href="{{ url_for('index', page=page-1, tienda=filtros.tienda, modelo=filtros.modelo, ordenar_por=filtros.ordenar_por, orden=filtros.orden) }}" class="btn-pagina">&laquo; Anterior</a>
+            {% endif %}
+            
+            <span class="pagina-actual">Página {{ page }} de {{ total_pages }}</span>
+            
+            {% if page < total_pages %}
+            <a href="{{ url_for('index', page=page+1, tienda=filtros.tienda, modelo=filtros.modelo, ordenar_por=filtros.ordenar_por, orden=filtros.orden) }}" class="btn-pagina">Siguiente &raquo;</a>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
     
     <footer>
@@ -111,16 +135,27 @@
     <script>
         // Código JavaScript para mejorar la interactividad
         document.addEventListener('DOMContentLoaded', function() {
-            // Añadir funcionalidad para limpiar filtros
-            const btnLimpiar = document.createElement('button');
-            btnLimpiar.textContent = 'Limpiar Filtros';
-            btnLimpiar.className = 'btn-limpiar';
-            btnLimpiar.type = 'button';
-            btnLimpiar.addEventListener('click', function() {
-                window.location.href = '/';
-            });
+            // Modo oscuro
+            const toggleSwitch = document.querySelector('#checkbox');
             
-            document.querySelector('.filtros form').appendChild(btnLimpiar);
+            // Comprobar preferencias guardadas
+            if (localStorage.getItem('theme') === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                toggleSwitch.checked = true;
+            }
+            
+            // Evento para cambiar tema
+            toggleSwitch.addEventListener('change', switchTheme);
+            
+            function switchTheme(e) {
+                if (e.target.checked) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                    localStorage.setItem('theme', 'light');
+                }
+            }
         });
     </script>
 </body>

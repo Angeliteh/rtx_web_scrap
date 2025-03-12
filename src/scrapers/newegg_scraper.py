@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
-from filters import filtrar_productos_irrelevantes
-from scrapers.base_scraper import crear_producto_base, filtrar_productos_validos
+from src.utils.filters import filtrar_productos_irrelevantes
+from src.scrapers.base_scraper import detectar_modelo, crear_producto_base, filtrar_productos_validos
 
 def scrape_newegg_page(html_content):
     """

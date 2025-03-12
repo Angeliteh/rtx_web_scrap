@@ -1,0 +1,85 @@
+<!-- templates/historial.html -->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial de Precios</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Historial de Precios</h1>
+        <a href="/" class="btn-volver">Volver a la lista</a>
+        
+        <!-- Interruptor de Modo Oscuro -->
+        <div class="theme-switch-wrapper">
+            <label class="theme-switch" for="checkbox">
+                <input type="checkbox" id="checkbox" />
+                <div class="slider"></div>
+            </label>
+        </div>
+    </header>
+    
+    <div class="historial-container">
+        <h2>Historial de Precios</h2>
+        
+        <div class="grafico-container">
+            <img src="{{ url_for('static', filename=ruta_grafico) }}" alt="Gráfico de precios" class="grafico-img">
+        </div>
+        
+        <div class="tabla-historial">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Precio</th>
+                        <th>Vendedor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for registro in historial %}
+                    <tr>
+                        <td>{{ registro.fecha }}</td>
+                        <td>{{ formatear_precio(registro.precio) }}</td>
+                        <td>{{ registro.vendedor }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <footer>
+        <p>Monitor de Precios de GPUs &copy; 2025</p>
+    </footer>
+    
+    <script>
+        // Código JavaScript para modo oscuro
+        document.addEventListener('DOMContentLoaded', function() {
+            // Modo oscuro
+            const toggleSwitch = document.querySelector('#checkbox');
+            
+            // Comprobar preferencias guardadas
+            if (localStorage.getItem('theme') === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                toggleSwitch.checked = true;
+            }
+            
+            // Evento para cambiar tema
+            toggleSwitch.addEventListener('change', switchTheme);
+            
+            function switchTheme(e) {
+                if (e.target.checked) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                    localStorage.setItem('theme', 'light');
+                }
+            }
+        });
+    </script>
+</body>
+</html> 

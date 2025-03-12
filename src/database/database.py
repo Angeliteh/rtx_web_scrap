@@ -3,7 +3,7 @@ import sqlite3
 import psycopg2
 import pymongo
 from datetime import datetime
-from config import DATABASE_TYPE, DATABASE_NAME, POSTGRES_CONFIG, MONGODB_CONFIG
+from src.config.config import DATABASE_TYPE, DATABASE_NAME, POSTGRES_CONFIG, MONGODB_CONFIG, PALABRAS_PROHIBIDAS
 
 def get_db_connection():
     """
@@ -288,12 +288,58 @@ def obtener_historial_precios(id_producto, limite=30):
     
     return historial
 
-def obtener_todos_productos(filtros=None):
+def contiene_palabra_prohibida(nombre):
     """
-    Obtiene todos los productos de la base de datos.
+    Verifica si un nombre de producto contiene alguna palabra prohibida.
+    
+    Args:
+        nombre (str): Nombre del producto a verificar
+        
+    Returns:
+        bool: True si contiene alguna palabra prohibida, False en caso contrario
+    """
+    nombre_lower = nombre.lower()
+    return any(palabra.lower() in nombre_lower for palabra in PALABRAS_PROHIBIDAS)
+
+def limpiar_productos_prohibidos():
+    """
+    Elimina de la base de datos los productos que contienen palabras prohibidas.
+    """
+    conn, db_type = get_db_connection()
+    
+    try:
+        if db_type == "mongodb":
+            productos_collection = conn[MONGODB_CONFIG['collection']]
+            productos = productos_collection.find({})
+            
+            for producto in productos:
+                if contiene_palabra_prohibida(producto["nombre"]):
+                    productos_collection.delete_one({"_id": producto["_id"]})
+                    
+        else:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, nombre FROM productos")
+            productos = cursor.fetchall()
+            
+            for producto_id, nombre in productos:
+                if contiene_palabra_prohibida(nombre):
+                    cursor.execute("DELETE FROM productos WHERE id = ?", (producto_id,))
+                    cursor.execute("DELETE FROM historial_precios WHERE producto_id = ?", (producto_id,))
+            
+            conn.commit()
+            
+    finally:
+        if db_type != "mongodb":
+            conn.close()
+
+def obtener_todos_productos(filtros=None, ordenar_por='precio', orden='ASC'):
+    """
+    Obtiene todos los productos de la base de datos, excluyendo aquellos con palabras prohibidas.
     
     Args:
         filtros (dict, opcional): Filtros a aplicar (ej: {"modelo": "RTX 4070"})
+        ordenar_por (str): Campo por el cual ordenar los resultados
+        orden (str): Dirección del ordenamiento ('ASC' o 'DESC')
         
     Returns:
         list: Lista de diccionarios con información de productos
@@ -302,56 +348,64 @@ def obtener_todos_productos(filtros=None):
     productos = []
     
     if db_type == "mongodb":
-        # MongoDB
         productos_collection = conn[MONGODB_CONFIG['collection']]
         
-        # Aplicar filtros si existen
         query = {}
         if filtros:
             for clave, valor in filtros.items():
-                query[clave] = valor
+                if valor:
+                    if clave == 'tienda':
+                        query[clave] = {'$regex': f'^{valor}$', '$options': 'i'}
+                    elif clave == 'modelo':
+                        query[clave] = {'$regex': valor, '$options': 'i'}
         
-        # Consultar productos
-        cursor = productos_collection.find(query)
+        sort_direction = pymongo.ASCENDING if orden == 'ASC' else pymongo.DESCENDING
+        cursor = productos_collection.find(query).sort(ordenar_por, sort_direction)
         
         for producto in cursor:
-            # Eliminar el campo _id generado por MongoDB (no es serializable)
-            if "_id" in producto:
-                del producto["_id"]
-            productos.append(producto)
+            if not contiene_palabra_prohibida(producto["nombre"]):
+                if "_id" in producto:
+                    del producto["_id"]
+                productos.append(producto)
     else:
-        # SQLite o PostgreSQL
         cursor = conn.cursor()
         
-        # Construir la consulta según los filtros
         query = "SELECT tienda, modelo, nombre, precio, fecha, vendedor, link, imagen, id_producto FROM productos"
         params = []
         
         if filtros:
             condiciones = []
             for clave, valor in filtros.items():
-                condiciones.append(f"{clave} = ?")
-                params.append(valor)
+                if valor:
+                    if clave == 'tienda':
+                        condiciones.append("LOWER(tienda) = LOWER(?)")
+                        params.append(valor)
+                    elif clave == 'modelo':
+                        condiciones.append("modelo LIKE ?")
+                        params.append(f"%{valor}%")
             
             if condiciones:
                 query += " WHERE " + " AND ".join(condiciones)
         
-        # Ejecutar consulta
+        query += f" ORDER BY {ordenar_por} {orden}"
+        
         cursor.execute(query, params)
         
         for row in cursor.fetchall():
-            productos.append({
-                "tienda": row[0],
-                "modelo": row[1],
-                "nombre": row[2],
-                "precio": row[3],
-                "fecha": row[4],
-                "vendedor": row[5],
-                "link": row[6],
-                "imagen": row[7],
-                "id_producto": row[8]
-            })
-        
+            if not contiene_palabra_prohibida(row[2]):  # row[2] es el nombre del producto
+                productos.append({
+                    "tienda": row[0],
+                    "modelo": row[1],
+                    "nombre": row[2],
+                    "precio": row[3],
+                    "fecha": row[4],
+                    "vendedor": row[5],
+                    "link": row[6],
+                    "imagen": row[7],
+                    "id_producto": row[8]
+                })
+    
+    if db_type != "mongodb":
         conn.close()
     
     return productos
@@ -428,3 +482,45 @@ def obtener_estadisticas():
         conn.close()
     
     return estadisticas
+
+def obtener_productos_actuales(limite=100):
+    """
+    Obtiene los productos actuales de la base de datos.
+    
+    Args:
+        limite (int): Número máximo de productos a devolver
+        
+    Returns:
+        list: Lista de diccionarios con información de productos
+    """
+    conn, db_type = get_db_connection()
+    productos = []
+    
+    try:
+        if db_type == "mongodb":
+            # MongoDB
+            collection = conn[MONGODB_CONFIG['collection']]
+            cursor = collection.find().sort("fecha", -1).limit(limite)
+            productos = list(cursor)
+            
+        else:
+            # SQLite o PostgreSQL
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, tienda, modelo, nombre, precio, fecha, vendedor, link, imagen, id_producto
+                FROM productos
+                ORDER BY fecha DESC
+                LIMIT ?
+            ''', (limite,))
+            
+            columnas = ['id', 'tienda', 'modelo', 'nombre', 'precio', 'fecha', 'vendedor', 'link', 'imagen', 'id_producto']
+            productos = [dict(zip(columnas, row)) for row in cursor.fetchall()]
+            
+    except Exception as e:
+        print(f"Error al obtener productos actuales: {e}")
+        
+    finally:
+        if db_type != "mongodb":
+            conn.close()
+            
+    return productos
