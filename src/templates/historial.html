@@ -72,41 +72,185 @@
         {% endif %}
         
         {% if ruta_grafico %}
-        <div class="grafico-container">
-            <h3>Gráfico de Precios</h3>
-            <img src="{{ url_for('static', filename=ruta_grafico) }}" 
-                 alt="Gráfico de precios" 
-                 class="grafico-img"
-                 onerror="this.style.display='none'; document.getElementById('error-grafico').style.display='block';">
-            <div id="error-grafico" style="display:none;" class="error-mensaje">
-                No se pudo cargar el gráfico
+        <div class="grafico-section">
+            <div class="grafico-header">
+                <h3>Evolución de Precios</h3>
+                <div class="grafico-controls">
+                    <button class="btn-period active" data-period="7">7 días</button>
+                    <button class="btn-period" data-period="30">30 días</button>
+                    <button class="btn-period" data-period="90">3 meses</button>
+                    <button class="btn-period" data-period="all">Todo</button>
+                </div>
+            </div>
+            <div class="grafico-wrapper">
+                <canvas id="priceChart"></canvas>
             </div>
         </div>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const ctx = document.getElementById('priceChart').getContext('2d');
+                
+                // Datos del historial
+                const historialData = {{ historial|tojson|safe }};
+                
+                // Preparar datos para el gráfico
+                const fechas = historialData.map(item => item.fecha);
+                const precios = historialData.map(item => item.precio);
+                
+                // Configuración del gráfico
+                const chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: fechas,
+                        datasets: [{
+                            label: 'Precio',
+                            data: precios,
+                            borderColor: 'rgb(75, 192, 192)',
+                            tension: 0.1,
+                            fill: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                ticks: {
+                                    callback: function(value) {
+                                        return '$' + value.toLocaleString();
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return '$' + context.parsed.y.toLocaleString();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Función para filtrar datos por período
+                function filterData(days) {
+                    if (days === 'all') {
+                        return {fechas, precios};
+                    }
+                    
+                    const cutoffDate = new Date();
+                    cutoffDate.setDate(cutoffDate.getDate() - days);
+                    
+                    const filteredData = historialData.filter(item => new Date(item.fecha) >= cutoffDate);
+                    return {
+                        fechas: filteredData.map(item => item.fecha),
+                        precios: filteredData.map(item => item.precio)
+                    };
+                }
+
+                // Manejar clicks en los botones de período
+                document.querySelectorAll('.btn-period').forEach(button => {
+                    button.addEventListener('click', function() {
+                        // Actualizar estado activo de los botones
+                        document.querySelectorAll('.btn-period').forEach(btn => btn.classList.remove('active'));
+                        this.classList.add('active');
+                        
+                        // Filtrar datos según el período seleccionado
+                        const period = this.dataset.period;
+                        const filteredData = filterData(period === 'all' ? 'all' : parseInt(period));
+                        
+                        // Actualizar el gráfico
+                        chart.data.labels = filteredData.fechas;
+                        chart.data.datasets[0].data = filteredData.precios;
+                        chart.update();
+                    });
+                });
+            });
+        </script>
         {% endif %}
-        
-        {% if historial %}
-        <div class="tabla-historial">
-            <h3>Registro de Precios</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Precio</th>
-                        <th>Vendedor</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for registro in historial %}
-                    <tr>
-                        <td>{{ registro.fecha }}</td>
-                        <td>${{ formatear_precio(registro.precio) }}</td>
-                        <td>{{ registro.vendedor }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+
+        <div class="analisis-section">
+            <div class="stats-tendencia">
+                <h3>Análisis de Tendencia</h3>
+                <div class="tendencia-cards">
+                    <div class="tendencia-card">
+                        <span class="tendencia-label">Tendencia</span>
+                        <span class="tendencia-value {% if tendencia > 0 %}subida{% elif tendencia < 0 %}bajada{% else %}estable{% endif %}">
+                            {% if tendencia > 0 %}↗ Subiendo{% elif tendencia < 0 %}↘ Bajando{% else %}→ Estable{% endif %}
+                        </span>
+                    </div>
+                    <div class="tendencia-card">
+                        <span class="tendencia-label">Variación 30 días</span>
+                        <span class="tendencia-value">{{ variacion_30d }}%</span>
+                    </div>
+                    <div class="tendencia-card">
+                        <span class="tendencia-label">Mejor momento para comprar</span>
+                        <span class="tendencia-value">{{ mejor_momento }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h4>Precio Actual</h4>
+                    <p class="stat-value">${{ formatear_precio(precio_actual) }}</p>
+                    <p class="stat-compare {% if diferencia_promedio > 0 %}subida{% else %}bajada{% endif %}">
+                        {{ diferencia_promedio }}% vs promedio
+                    </p>
+                </div>
+                <div class="stat-card">
+                    <h4>Precio Mínimo</h4>
+                    <p class="stat-value">${{ formatear_precio(estadisticas.precio_minimo) }}</p>
+                    <p class="stat-date">{{ fecha_precio_minimo }}</p>
+                </div>
+                <div class="stat-card">
+                    <h4>Precio Máximo</h4>
+                    <p class="stat-value">${{ formatear_precio(estadisticas.precio_maximo) }}</p>
+                    <p class="stat-date">{{ fecha_precio_maximo }}</p>
+                </div>
+                <div class="stat-card">
+                    <h4>Precio Promedio</h4>
+                    <p class="stat-value">${{ formatear_precio(estadisticas.precio_promedio) }}</p>
+                    <p class="stat-info">últimos 30 días</p>
+                </div>
+            </div>
+
+            <div class="tabla-historial-section">
+                <h3>Registro de Cambios de Precio</h3>
+                <div class="tabla-wrapper">
+                    <table class="tabla-historial">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Precio</th>
+                                <th>Cambio</th>
+                                <th>Vendedor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for registro in historial %}
+                            <tr>
+                                <td>{{ registro.fecha }}</td>
+                                <td>${{ formatear_precio(registro.precio) }}</td>
+                                <td class="precio-cambio {% if registro.cambio > 0 %}subida{% elif registro.cambio < 0 %}bajada{% else %}igual{% endif %}">
+                                    {% if registro.cambio != 0 %}
+                                        {{ registro.cambio }}%
+                                    {% else %}
+                                        --
+                                    {% endif %}
+                                </td>
+                                <td>{{ registro.vendedor }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-        {% endif %}
     </div>
     
     <footer>

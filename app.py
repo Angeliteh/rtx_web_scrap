@@ -188,7 +188,6 @@ def historial(id_producto):
                                 mensaje="El producto que buscas no existe o ha sido eliminado.")
         
         if not historial:
-            # Si el producto existe pero no tiene historial, mostrar mensaje especial
             return render_template('historial.html',
                                producto=info_producto,
                                historial=[],
@@ -210,22 +209,82 @@ def historial(id_producto):
         
         # Calcular estadísticas del historial
         if precios:
+            precio_actual = precios[-1] if precios else 0
+            precio_promedio = sum(precios) / len(precios)
+            
+            # Calcular tendencia (últimos 30 días o todos si hay menos)
+            precios_recientes = precios[-30:] if len(precios) > 30 else precios
+            if len(precios_recientes) > 1:
+                tendencia = (precios_recientes[-1] - precios_recientes[0]) / precios_recientes[0] * 100
+            else:
+                tendencia = 0
+            
+            # Calcular variación 30 días
+            if len(precios) > 30:
+                variacion_30d = ((precios[-1] - precios[-30]) / precios[-30] * 100)
+            else:
+                variacion_30d = 0
+            
+            # Determinar mejor momento para comprar
+            precio_promedio_30d = sum(precios_recientes) / len(precios_recientes)
+            if precio_actual < precio_promedio_30d:
+                mejor_momento = "Buen momento para comprar"
+            elif tendencia < -5:
+                mejor_momento = "Esperar (precio bajando)"
+            else:
+                mejor_momento = "Precio por encima del promedio"
+            
+            # Calcular diferencia con el promedio
+            diferencia_promedio = ((precio_actual - precio_promedio) / precio_promedio * 100)
+            
+            # Encontrar fechas de precios mínimo y máximo
+            idx_min = precios.index(min(precios))
+            idx_max = precios.index(max(precios))
+            fecha_precio_minimo = fechas[idx_min]
+            fecha_precio_maximo = fechas[idx_max]
+            
             estadisticas_historial = {
                 'precio_minimo': min(precios),
                 'precio_maximo': max(precios),
-                'precio_promedio': sum(precios) / len(precios),
+                'precio_promedio': precio_promedio,
                 'total_registros': len(precios)
             }
+            
+            # Calcular cambios porcentuales para el historial
+            for i in range(len(historial)):
+                if i > 0:
+                    precio_anterior = historial[i-1]['precio']
+                    precio_actual = historial[i]['precio']
+                    cambio = ((precio_actual - precio_anterior) / precio_anterior * 100)
+                    historial[i]['cambio'] = round(cambio, 2)
+                else:
+                    historial[i]['cambio'] = 0
+                    
         else:
             estadisticas_historial = None
+            tendencia = 0
+            variacion_30d = 0
+            mejor_momento = "Sin datos suficientes"
+            diferencia_promedio = 0
+            precio_actual = 0
+            fecha_precio_minimo = "Sin datos"
+            fecha_precio_maximo = "Sin datos"
         
         return render_template('historial.html',
                            producto=info_producto,
                            historial=historial,
                            ruta_grafico=ruta_grafico,
                            estadisticas=estadisticas_historial,
+                           tendencia=tendencia,
+                           variacion_30d=round(variacion_30d, 2),
+                           mejor_momento=mejor_momento,
+                           diferencia_promedio=round(diferencia_promedio, 2),
+                           precio_actual=precio_actual,
+                           fecha_precio_minimo=fecha_precio_minimo,
+                           fecha_precio_maximo=fecha_precio_maximo,
                            formatear_precio=formatear_precio,
                            now=datetime.now())
+                           
     except Exception as e:
         logger.error(f"Error al mostrar historial: {e}")
         return render_template('500.html', 
