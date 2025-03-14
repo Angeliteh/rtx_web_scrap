@@ -21,6 +21,37 @@ def extraer_precio_mercadolibre(precio_tag):
         print(f"Error extrayendo precio de MercadoLibre: {e}")
         return 0.0
 
+def transformar_url_imagen(url_original):
+    """
+    Transforma la URL de la imagen de MercadoLibre para obtener la versión de mejor calidad.
+    
+    Patrones de transformación:
+    - D_Q_NP -> D_NQ_NP (mejor calidad)
+    - -V.webp -> -F.webp (imagen completa)
+    - -O.webp -> -F.webp (sin optimización)
+    """
+    if not url_original or 'http2.mlstatic.com' not in url_original:
+        return url_original
+
+    url_transformada = url_original
+
+    # Transformaciones principales
+    transformaciones = [
+        ('D_Q_NP', 'D_NQ_NP'),      # Mejora la calidad
+        ('D_Q_NP_2X', 'D_NQ_NP_2X'),  # Mejora la calidad en imágenes 2X
+        ('-V.webp', '-F.webp'),      # Cambia a versión completa
+        ('-O.webp', '-F.webp'),      # Cambia optimizada a completa
+        ('.jpg', '-F.webp'),         # Cambia JPG a WebP
+    ]
+
+    for viejo, nuevo in transformaciones:
+        url_transformada = url_transformada.replace(viejo, nuevo)
+
+    print(f"URL original: {url_original}")
+    print(f"URL transformada: {url_transformada}")
+    
+    return url_transformada
+
 def scrape_mercadolibre_page(html_content):
     """
     Extrae la información relevante de cada producto de una página de resultados de MercadoLibre.
@@ -106,22 +137,14 @@ def scrape_mercadolibre_page(html_content):
             # Extraer imagen - actualizado para la nueva estructura
             imagen = ""
             img_tag = item.find('img', class_='poly-component__picture')
-            if img_tag and img_tag.get('src'):
-                imagen = img_tag['src']
-                print(f"URL de imagen original: {imagen}")
-                
-                # Solo registrar la URL original para depuración, pero no transformarla
-                # La transformación se realizará en el frontend mediante handleImageError
-            else:
-                # Fallback al método anterior
+            if not img_tag:
                 img_tag = item.find('img', class_='ui-search-result-image__element')
-                if img_tag:
-                    if img_tag.get('data-src'):
-                        imagen = img_tag['data-src']
-                    elif img_tag.get('src'):
-                        imagen = img_tag['src']
-                    
-                    print(f"URL de imagen (método fallback): {imagen}")
+            
+            if img_tag:
+                # Intentar obtener la URL de la imagen
+                imagen = img_tag.get('data-src') or img_tag.get('src', '')
+                # Transformar la URL
+                imagen = transformar_url_imagen(imagen)
             
             # Imprimir la URL final de la imagen para depuración
             print(f"URL final de imagen: {imagen}")

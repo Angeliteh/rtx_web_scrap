@@ -23,7 +23,6 @@ def ejecutar_scraper():
         'mercadolibre': {'func': scrape_mercadolibre_page, 'url_template': "https://listado.mercadolibre.com.mx/rtx-{}"}
     }
     
-    # Iterar sobre cada sitio habilitado y modelo de GPU
     for sitio in SITIOS_HABILITADOS:
         if sitio not in scrapers:
             print(f"⚠️ Sitio {sitio} no implementado. Omitiendo...")
@@ -37,20 +36,23 @@ def ejecutar_scraper():
             html_content = fetch_page(url)
 
             if html_content:
-                # Obtener productos del sitio
                 productos = scraper_info['func'](html_content)
                 
-                # Para cada producto, verificar si hay cambios de precio significativos
                 for producto in productos:
-                    # Obtener historial de precios para verificar cambios
-                    historial = obtener_historial_precios(producto['id_producto'], limite=2)
-                    
-                    # Si hay historial suficiente, verificar si se debe enviar alerta
-                    if len(historial) >= 2:
-                        precio_anterior = historial[1]['precio']
+                    try:
+                        # Obtener historial de precios y desempaquetar la tupla
+                        historial_precios, info_producto = obtener_historial_precios(producto['id_producto'], limite=2)
                         
-                        # Enviar alertas si es necesario
-                        enviar_alertas(producto, precio_anterior)
+                        # Verificar si hay suficiente historial
+                        if historial_precios and len(historial_precios) >= 2:
+                            precio_anterior = historial_precios[1]['precio']
+                            # Enviar alertas si es necesario
+                            enviar_alertas(producto, precio_anterior)
+                        else:
+                            print(f"ℹ️ Primer registro o sin historial para el producto {producto.get('nombre', 'Nombre desconocido')} ({producto.get('id_producto', 'ID desconocido')})")
+                    except Exception as e:
+                        print(f"❌ Error procesando historial del producto {producto.get('id_producto', 'ID desconocido')}: {str(e)}")
+                        continue
                 
                 # Guardar productos en la base de datos
                 guardar_en_db(productos)

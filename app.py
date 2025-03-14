@@ -143,10 +143,14 @@ def index():
         
         # Calcular la paginación
         total_productos = len(todos_productos)
-        total_pages = (total_productos + per_page - 1) // per_page
+        # Asegurar que total_pages sea al menos 1
+        total_pages = ((total_productos + per_page - 1) // per_page) if total_productos > 0 else 1
         
-        # Asegurar que la página actual es válida
-        page = max(1, min(page, total_pages))
+        # Asegurar que la página actual esté dentro de los límites válidos
+        if page < 1:
+            page = 1
+        if page > total_pages:
+            page = total_pages
         
         # Obtener los productos de la página actual
         start_idx = (page - 1) * per_page
